@@ -2,17 +2,18 @@
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
-using System.Threading.Tasks;
 using Microsoft.DotNet.Cli.Utils;
 
 namespace ZipGit
 {
     class Program
     {
-        private static string[] Run(string commandName, params string[] args)
+        private static string[] Run(string workingDirectory, string commandName, params string[] args)
         {
             var lines = new List<string>();
-            var command = Command.Create(commandName, args);
+            var command = Command
+                .Create(commandName, args)
+                .WorkingDirectory(workingDirectory);
             Console.WriteLine($"{command.CommandName} {command.CommandArgs}");
             var result = command.OnOutputLine(lines.Add).Execute();
             if (result.ExitCode != 0)
@@ -22,24 +23,40 @@ namespace ZipGit
             return lines.ToArray();
         }
 
-        static async Task Main()
+        static void Main(string[] args)
         {
-            var lines = Run("git", "ls-files");
-            var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-            using var stream = new MemoryStream();
-            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+            string currentPath = Directory.GetCurrentDirectory();
+            string path = args.Length > 0 ? Path.GetFullPath(args[0]) : currentPath;
+            var lines = Run(path, "git", "ls-files");
+            string tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempPath);
+            try
             {
+                var directory = new DirectoryInfo(path);
+                string baseDirectory = Path.Combine(tempPath, directory.Name);
                 foreach (var line in lines)
                 {
-                    string entryName = Path.Combine(directory.Name, line);
-                    Console.WriteLine(entryName);
-                    archive.CreateEntryFromFile(line, entryName);
+                    string sourceFilePath = Path.Combine(path, line);
+                    string tempFilePath = Path.Combine(baseDirectory, line);
+                    Directory.CreateDirectory(Path.GetDirectoryName(tempFilePath));
+                    File.Copy(sourceFilePath, tempFilePath);
+                    Console.WriteLine(Path.GetRelativePath(tempPath, tempFilePath));
                 }
+                string zipFilePath = Path.Combine(currentPath, $"{directory.Name}.zip");
+                if (File.Exists(zipFilePath))
+                {
+                    File.Delete(zipFilePath);
+                }
+                ZipFile.CreateFromDirectory(
+                    baseDirectory,
+                    zipFilePath,
+                    default,
+                    includeBaseDirectory: true);
             }
-            string zipFilePath = Path.Combine(directory.FullName, $"{directory.Name}.zip");
-            using var zipFile = File.OpenWrite(zipFilePath);
-            stream.Seek(0, SeekOrigin.Begin);
-            await stream.CopyToAsync(zipFile);
+            finally
+            {
+                Directory.Delete(tempPath, recursive: true);
+            }
         }
     }
 }
