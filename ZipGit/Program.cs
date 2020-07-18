@@ -31,9 +31,9 @@ namespace ZipGit
             {
                 foreach (var line in lines)
                 {
-                    string filePath = Path.Combine(directory.FullName, line);
-                    Console.WriteLine(filePath);
-                    archive.CreateEntryFromFile(filePath, line);
+                    string entryName = Path.Combine(directory.Name, line);
+                    Console.WriteLine(entryName);
+                    archive.CreateEntryFromFile(line, entryName);
                 }
             }
             string zipFilePath = Path.Combine(directory.FullName, $"{directory.Name}.zip");
