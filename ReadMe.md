@@ -6,5 +6,5 @@ Zip files tracked by Git in the current directory.
 dotnet tool install --global ZipGit
 ```
 ```
-dotnet zip-git
+zip-git
 ```
